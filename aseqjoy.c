@@ -1,5 +1,5 @@
 /**
- * aseqjoy - Tiny Jostick -> MIDI Controller Tool
+ * aseqjoy - Tiny Joystick -> MIDI Controller Tool
  * Copyright 2003-2016 by Alexander Koenig - alex@lisas.de
  *
  * This program is free software; you can redistribute it and/or modify
@@ -48,11 +48,12 @@ int joystick_no=0;
 typedef struct {
 	int controller;
 	int last_value;
-}  val;
+} val;
 
 snd_seq_t *seq_handle;
 snd_seq_event_t ev;
 int controllers[4];
+int buttons_map[32]; // Assuming a maximum of 32 buttons for mapping
 int verbose=0;
 int cc14=0;
 
@@ -139,6 +140,13 @@ void loop()
 		printf("  %2i -> %3i\n", i, values[i].controller);
 		values[i].last_value=0;		
 	}
+
+	puts("Button -> MIDI controller mapping:");
+	for (i=0; i<buttons; i++) {
+		if (buttons_map[i] != -1) {
+			printf("  %2i -> %3i\n", i, buttons_map[i]);
+		}
+	}
 	
 	puts("Ready, entering loop - use Ctrl-C to exit.");	
 
@@ -150,29 +158,34 @@ void loop()
 
 		switch(js.type & ~JS_EVENT_INIT) {		
 			case JS_EVENT_BUTTON:
-				if (js.value) {			
-					current_channel=js.number+1;
-				
+				if (buttons_map[js.number] != -1) {
 					if (verbose) {
-						printf("Switched to MIDI channel %i.\n", current_channel);
+						printf("Button %i pressed, sending MIDI controller %i with value %i.\n", js.number, buttons_map[js.number], js.value);
 					}
+					
+					ev.type = SND_SEQ_EVENT_CONTROLLER;
+					snd_seq_ev_set_fixed(&ev);
+					ev.data.control.channel = current_channel;
+					ev.data.control.param = buttons_map[js.number];
+					ev.data.control.value = js.value ? 127 : 0;
+					snd_seq_event_output_direct(seq_handle, &ev);
 				}
 			break;
 			
 			case JS_EVENT_AXIS:
-				val_d=(double) js.value;
-				val_d+=SHRT_MAX;
-				val_d=val_d/((double) USHRT_MAX);
+				val_d = (double) js.value;
+				val_d += SHRT_MAX;
+				val_d = val_d / ((double) USHRT_MAX);
 				
 				if (cc14) {
-					val_d*=16383.0;
+					val_d *= 16383.0;
 				} else {
-					val_d*=127.0;
+					val_d *= 127.0;
 				}
 			
-				val_i=(int) val_d;
+				val_i = (int) val_d;
 			
-				if (values[js.number].last_value!=val_i) {
+				if (values[js.number].last_value != val_i) {
 					if (cc14) {
 						ev.type = SND_SEQ_EVENT_CONTROL14;
 					} else {					
@@ -180,17 +193,16 @@ void loop()
 					}
 
 					snd_seq_ev_set_fixed(&ev);
-					ev.data.control.channel=current_channel;
-					ev.data.control.param=values[js.number].controller;
-					ev.data.control.value=val_i;
-
-					
-					// snd_seq_ev_set_controller(&ev, current_channel, values[js.number].controller, val_i);
+					ev.data.control.channel = current_channel;
+					ev.data.control.param = values[js.number].controller;
+					ev.data.control.value = val_i;
 					snd_seq_event_output_direct(seq_handle, &ev);
 					
 					if (verbose) {
 						printf("Sent controller %i with value: %i.\n", values[js.number].controller, val_i);
 					}
+					
+					values[js.number].last_value = val_i;
 				}
 			break;
 		}
@@ -207,48 +219,64 @@ int main (int argc, char **argv)
 		controllers[i]=10+i;
 	}
 	
+	for (i=0; i<32; i++) {
+		buttons_map[i] = -1; // Initialize all buttons as unmapped
+	}
+	
 	while (1) {
-		int i=getopt(argc, argv, "vhrd:0:1:2:3:");
+		int i=getopt(argc, argv, "vhrd:0:1:2:3:b:");
 		if (i==-1) break;
 		
 		switch (i) {
 			case '?':
 			case 'h':
-				printf("usase: %s [-d joystick_no] [-v] [-0 ctrl0] [-1 ctrl1] [-2 ctrl2] [-3 ctrl3]\n\n", TOOL_NAME);
+				printf("usage: %s [-d joystick_no] [-v] [-0 ctrl0] [-1 ctrl1] [-2 ctrl2] [-3 ctrl3] [-b button=controller]\n\n", TOOL_NAME);
 				puts("\t-d select the joystick to use: 0..3");
 				puts("\t-0 select the controller for axis 0 (1-127)");
 				puts("\t-1 select the controller for axis 1 (1-127) etc");
 				puts("\t-r use fine control change events (14 bit resolution)");
 				puts("\t-v verbose mode.");
+				puts("\t-b map button to controller (format: button=controller)");
 				exit(-2);
 			break;
 			
 			case '0':
-				controllers[0]=atoi(optarg);
+				controllers[0] = atoi(optarg);
 			break;
 
 			case '1':
-				controllers[1]=atoi(optarg);
+				controllers[1] = atoi(optarg);
 			break;
 
 			case '2':
-				controllers[2]=atoi(optarg);
+				controllers[2] = atoi(optarg);
 			break;
 
 			case '3':
-				controllers[3]=atoi(optarg);
+				controllers[3] = atoi(optarg);
+			break;
+			
+			case 'b': {
+				int button, controller;
+				if (sscanf(optarg, "%d=%d", &button, &controller) == 2 && button >= 0 && button < 32 && controller >= 0 && controller <= 127) {
+					buttons_map[button] = controller;
+				} else {
+					fprintf(stderr, "Invalid button mapping: %s\n", optarg);
+					exit(-2);
+				}
+			}
 			break;
 			
 			case 'v':
-				verbose=1;
+				verbose = 1;
 			break;
 
 			case 'r':
-				cc14=1;
+				cc14 = 1;
 			break;
 			
 			case 'd':
-				joystick_no=atoi(optarg);
+				joystick_no = atoi(optarg);
 			break;
 		}
 	}
