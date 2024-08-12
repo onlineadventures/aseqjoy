@@ -1,7 +1,14 @@
+Forked to add mapping of specific buttons to MIDI controllers using the `-b` option.
+
+In this version, only the buttons specified with the `-b` option will be included in the button map. Buttons not defined in the command will be ignored. The format for the `-b` option is `button=controller`.
+
+See below for example usage.
+
+
 aseqjoy - a simple joystick to ALSA MIDI sequencer converter
 ============================================================
 
-Copyright 2003-2016 by Alexander König - alex@lisas.de
+Copyright 2003-2016 by Alexander KÃ¶nig - alex@lisas.de
 
 License: GNU General Public License Version 2 or (at your option) any later 
 version - for details please refer to the file [COPYING](./COPYING) included 
@@ -15,7 +22,7 @@ message represents the joystick's position along the axis (eg 'left' -> 0,
 commandline switch to use fine MIDI control change messages instead (with 14
 bit resolution).
 
-aseqjoy uses the ALSA sequencer API to emit the MIDI events. Therefor it
+aseqjoy uses the ALSA sequencer API to emit the MIDI events. Therefore it
 creates and output port named after joystick used. You can then use for example
 aconnect (from alsa-utils), QjackCtl or Robert Ham's alsa-patch-bay to connect
 an aseqjoy instance to an input port of your choice. 
@@ -62,5 +69,24 @@ to connect that output port to another application's input sequencer port
 the controllers to certain controls you should see how moving the joystick
 affects the corresponding control.
 
-Have Fun,
-Alex
+Button Mapping
+--------------
+
+You can now map specific buttons to MIDI controllers using the `-b` option. Only the buttons specified with the `-b` option will be included in the button map. Buttons not defined in the command will be ignored. The format for the `-b` option is `button=controller`.
+
+Example usage:
+
+```sh
+./aseqjoy -d 0 -v -0 1 -1 2 -2 3 -3 4 -b 0=20 -b 1=21 -b 2=22
+```
+
+Explanation:
+
+-d 0: Select joystick 0.
+-v: Enable verbose mode.
+-0 1, -1 2, -2 3, -3 4: Map joystick axes to MIDI controllers 1, 2, 3, and 4 respectively.
+-b 0=20: Map button 0 to MIDI controller 20.
+-b 1=21: Map button 1 to MIDI controller 21.
+-b 2=22: Map button 2 to MIDI controller 22.
+
+With this configuration, only buttons 0, 1, and 2 will be mapped to MIDI controllers 20, 21, and 22, respectively. Other buttons will be ignored.
